@@ -1,2 +1,26 @@
 /target
 /reference
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build
+/dist
+/build
+
+# Dependencies
+node_modules/
+*.lock
+*.log
+
+# Environment
+.env
+.env.local
+
+# OS
+Thumbs.db
