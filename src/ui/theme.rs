@@ -10,13 +10,15 @@ pub const BLOCK_EMPTY: &str = "  ";
 pub const BLOCK_DOT: &str = "· ";
 pub const BLOCK_GARBAGE: &str = "▒▒";
 
-// Border characters
-pub const BORDER_TL: &str = "╔";
-pub const BORDER_TR: &str = "╗";
-pub const BORDER_BL: &str = "╚";
-pub const BORDER_BR: &str = "╝";
-pub const BORDER_H: &str = "═";
-pub const BORDER_V: &str = "║";
+// Border characters (half-block elements for seamless piece-to-wall contact)
+pub const BORDER_TL: &str = "▗"; // Lower-right quadrant (connects top bar + left wall)
+pub const BORDER_TR: &str = "▖"; // Lower-left quadrant (connects top bar + right wall)
+pub const BORDER_BL: &str = "▝"; // Upper-right quadrant (connects bottom bar + left wall)
+pub const BORDER_BR: &str = "▘"; // Upper-left quadrant (connects bottom bar + right wall)
+pub const BORDER_H_TOP: &str = "▄"; // Lower half block (top border, fills toward playfield)
+pub const BORDER_H_BOT: &str = "▀"; // Upper half block (bottom border, fills toward playfield)
+pub const BORDER_V_LEFT: &str = "▐"; // Right half block (left wall, fills toward playfield)
+pub const BORDER_V_RIGHT: &str = "▌"; // Left half block (right wall, fills toward playfield)
 
 // Panel border characters
 pub const PANEL_TL: &str = "┌";

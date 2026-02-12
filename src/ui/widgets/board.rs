@@ -148,14 +148,14 @@ impl<'a> BoardWidget<'a> {
         let x = area.x;
         let y = area.y;
 
-        // Top border
+        // Top border (lower half blocks — fill toward the playfield below)
         buf.set_string(x, y, theme::BORDER_TL, style);
         for i in 1..w - 1 {
-            buf.set_string(x + i, y, theme::BORDER_H, style);
+            buf.set_string(x + i, y, theme::BORDER_H_TOP, style);
         }
         buf.set_string(x + w - 1, y, theme::BORDER_TR, style);
 
-        // Side borders
+        // Side borders (half blocks — fill toward the playfield inside)
         for row in 1..h - 1 {
             // Gradient: brighter near top
             let t = row as f32 / (h - 2) as f32;
@@ -169,14 +169,14 @@ impl<'a> BoardWidget<'a> {
             } else {
                 grad_color
             });
-            buf.set_string(x, y + row, theme::BORDER_V, grad_style);
-            buf.set_string(x + w - 1, y + row, theme::BORDER_V, grad_style);
+            buf.set_string(x, y + row, theme::BORDER_V_LEFT, grad_style);
+            buf.set_string(x + w - 1, y + row, theme::BORDER_V_RIGHT, grad_style);
         }
 
-        // Bottom border
+        // Bottom border (upper half blocks — fill toward the playfield above)
         buf.set_string(x, y + h - 1, theme::BORDER_BL, style);
         for i in 1..w - 1 {
-            buf.set_string(x + i, y + h - 1, theme::BORDER_H, style);
+            buf.set_string(x + i, y + h - 1, theme::BORDER_H_BOT, style);
         }
         buf.set_string(x + w - 1, y + h - 1, theme::BORDER_BR, style);
     }
