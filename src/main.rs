@@ -36,22 +36,29 @@ fn main() -> io::Result<()> {
         original_hook(info);
     }));
 
+    // Check if the terminal supports keyboard enhancement (key release events)
+    let has_key_release = crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+
     // Set up terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
-    )?;
+    if has_key_release {
+        execute!(
+            stdout,
+            EnterAlternateScreen,
+            EnableMouseCapture,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
+        )?;
+    } else {
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    }
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.hide_cursor()?;
     terminal.clear()?;
 
     // Run the app
-    let result = run_app(&mut terminal);
+    let result = run_app(&mut terminal, has_key_release);
 
     // Restore terminal
     restore_terminal()?;
@@ -59,8 +66,11 @@ fn main() -> io::Result<()> {
     result
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
-    let mut app = App::new();
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    has_key_release: bool,
+) -> io::Result<()> {
+    let mut app = App::new(has_key_release);
     let mut last_frame = Instant::now();
 
     loop {
@@ -94,6 +104,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
 
 fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
+    // PopKeyboardEnhancementFlags is safe to call even if we didn't push;
+    // it will just be ignored by terminals that don't support it.
     execute!(
         io::stdout(),
         LeaveAlternateScreen,

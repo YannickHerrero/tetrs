@@ -57,13 +57,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(has_key_release: bool) -> Self {
         Self {
             state: AppState::Menu,
             menu: MenuScreen::new(),
             game: GameState::new(),
             mode: None,
-            input: InputHandler::new(),
+            input: InputHandler::new(has_key_release),
             effects: Effects::new(),
             high_scores: HighScoreStore::load(),
             game_result: None,

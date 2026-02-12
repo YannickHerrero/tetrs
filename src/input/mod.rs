@@ -31,14 +31,18 @@ pub struct InputHandler {
     pub das: DasHandler,
     /// Whether we're in game mode (DAS active) or menu mode.
     pub in_game: bool,
+    /// Whether the terminal supports key release events (Kitty keyboard protocol).
+    /// When false, DAS is disabled and each press/repeat is treated as a single move.
+    pub has_key_release: bool,
 }
 
 impl InputHandler {
-    pub fn new() -> Self {
+    pub fn new(has_key_release: bool) -> Self {
         Self {
             keybinds: KeybindMap::new(),
             das: DasHandler::new(),
             in_game: false,
+            has_key_release,
         }
     }
 
@@ -62,7 +66,7 @@ impl InputHandler {
     /// Process DAS ticks. Returns additional game actions from auto-repeat.
     /// Should be called once per frame after poll().
     pub fn tick_das(&mut self, dt: Duration) -> Vec<GameAction> {
-        if !self.in_game {
+        if !self.in_game || !self.has_key_release {
             return Vec::new();
         }
 
@@ -90,6 +94,20 @@ impl InputHandler {
     }
 
     fn process_game_key(&mut self, code: KeyCode, kind: KeyEventKind) -> Option<AppInput> {
+        if self.has_key_release {
+            self.process_game_key_with_release(code, kind)
+        } else {
+            self.process_game_key_no_release(code, kind)
+        }
+    }
+
+    /// Input handling for terminals that support key release events.
+    /// Uses DAS for auto-repeat with proper press/release tracking.
+    fn process_game_key_with_release(
+        &mut self,
+        code: KeyCode,
+        kind: KeyEventKind,
+    ) -> Option<AppInput> {
         match kind {
             KeyEventKind::Press => {
                 let action = self.keybinds.resolve_game(code)?;
@@ -125,7 +143,6 @@ impl InputHandler {
                 match action {
                     Some(Action::MoveLeft) => {
                         self.das.left.release();
-                        // If right is still physically held, resume it
                         None
                     }
                     Some(Action::MoveRight) => {
@@ -139,6 +156,50 @@ impl InputHandler {
                     _ => None,
                 }
             }
+            // Repeat events are handled by DAS, ignore them
+            _ => None,
+        }
+    }
+
+    /// Input handling for terminals without key release events.
+    /// Each Press/Repeat generates exactly one action; DAS is not used.
+    fn process_game_key_no_release(
+        &mut self,
+        code: KeyCode,
+        kind: KeyEventKind,
+    ) -> Option<AppInput> {
+        match kind {
+            KeyEventKind::Press | KeyEventKind::Repeat => {
+                let action = self.keybinds.resolve_game(code)?;
+                match action {
+                    Action::MoveLeft => Some(AppInput::Game(GameAction::MoveLeft)),
+                    Action::MoveRight => Some(AppInput::Game(GameAction::MoveRight)),
+                    Action::SoftDrop => Some(AppInput::Game(GameAction::SoftDrop)),
+                    Action::HardDrop => {
+                        // Only on initial press, not repeats, to avoid accidental hard drops
+                        if kind == KeyEventKind::Press {
+                            Some(AppInput::Game(GameAction::HardDrop))
+                        } else {
+                            None
+                        }
+                    }
+                    Action::RotateCW => Some(AppInput::Game(GameAction::RotateCW)),
+                    Action::RotateCCW => Some(AppInput::Game(GameAction::RotateCCW)),
+                    Action::Rotate180 => Some(AppInput::Game(GameAction::Rotate180)),
+                    Action::Hold => {
+                        if kind == KeyEventKind::Press {
+                            Some(AppInput::Game(GameAction::Hold))
+                        } else {
+                            None
+                        }
+                    }
+                    Action::Pause => Some(AppInput::Pause),
+                    Action::Quit => Some(AppInput::Quit),
+                    Action::Restart => Some(AppInput::Restart),
+                    _ => None,
+                }
+            }
+            // No release events expected; ignore anything else
             _ => None,
         }
     }
