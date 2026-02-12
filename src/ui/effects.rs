@@ -93,10 +93,8 @@ impl Effects {
         self.action_text_opacity = (self.action_text_opacity - dt_f * 0.5).max(0.0);
     }
 
-    /// Trigger hard drop shake.
-    pub fn trigger_hard_drop(&mut self, cells: u32) {
-        let intensity = (cells as f32 * 0.15).min(2.0);
-        self.shake_vel.1 = -intensity;
+    /// Trigger hard drop visual feedback.
+    pub fn trigger_hard_drop(&mut self, _cells: u32) {
         self.hard_drop_flash = Duration::from_millis(80);
     }
 
