@@ -54,9 +54,7 @@ impl InputHandler {
         // Poll all available events (non-blocking, 1ms timeout)
         while let Ok(true) = event::poll(Duration::from_millis(1)) {
             if let Ok(Event::Key(key_event)) = event::read() {
-                if let Some(action) = self.process_key(key_event) {
-                    actions.push(action);
-                }
+                self.process_key(key_event, &mut actions);
             }
         }
 
@@ -83,21 +81,21 @@ impl InputHandler {
         actions
     }
 
-    fn process_key(&mut self, key_event: KeyEvent) -> Option<AppInput> {
+    fn process_key(&mut self, key_event: KeyEvent, actions: &mut Vec<AppInput>) {
         let code = key_event.code;
 
         if self.in_game {
-            self.process_game_key(code, key_event.kind)
-        } else {
-            self.process_menu_key(code, key_event.kind)
+            self.process_game_key(code, key_event.kind, actions);
+        } else if let Some(a) = self.process_menu_key(code, key_event.kind) {
+            actions.push(a);
         }
     }
 
-    fn process_game_key(&mut self, code: KeyCode, kind: KeyEventKind) -> Option<AppInput> {
+    fn process_game_key(&mut self, code: KeyCode, kind: KeyEventKind, actions: &mut Vec<AppInput>) {
         if self.has_key_release {
-            self.process_game_key_with_release(code, kind)
+            self.process_game_key_with_release(code, kind, actions);
         } else {
-            self.process_game_key_no_release(code, kind)
+            self.process_game_key_no_release(code, kind, actions);
         }
     }
 
@@ -107,35 +105,38 @@ impl InputHandler {
         &mut self,
         code: KeyCode,
         kind: KeyEventKind,
-    ) -> Option<AppInput> {
+        actions: &mut Vec<AppInput>,
+    ) {
         match kind {
             KeyEventKind::Press => {
-                let action = self.keybinds.resolve_game(code)?;
+                let Some(action) = self.keybinds.resolve_game(code) else {
+                    return;
+                };
                 match action {
                     Action::MoveLeft => {
                         // Cancel opposite direction
                         self.das.right.release();
                         self.das.left.press();
-                        Some(AppInput::Game(GameAction::MoveLeft))
+                        actions.push(AppInput::Game(GameAction::MoveLeft));
                     }
                     Action::MoveRight => {
                         self.das.left.release();
                         self.das.right.press();
-                        Some(AppInput::Game(GameAction::MoveRight))
+                        actions.push(AppInput::Game(GameAction::MoveRight));
                     }
                     Action::SoftDrop => {
                         self.das.soft_drop.press();
-                        Some(AppInput::Game(GameAction::SoftDrop))
+                        actions.push(AppInput::Game(GameAction::SoftDrop));
                     }
-                    Action::HardDrop => Some(AppInput::Game(GameAction::HardDrop)),
-                    Action::RotateCW => Some(AppInput::Game(GameAction::RotateCW)),
-                    Action::RotateCCW => Some(AppInput::Game(GameAction::RotateCCW)),
-                    Action::Rotate180 => Some(AppInput::Game(GameAction::Rotate180)),
-                    Action::Hold => Some(AppInput::Game(GameAction::Hold)),
-                    Action::Pause => Some(AppInput::Pause),
-                    Action::Quit => Some(AppInput::Quit),
-                    Action::Restart => Some(AppInput::Restart),
-                    _ => None,
+                    Action::HardDrop => actions.push(AppInput::Game(GameAction::HardDrop)),
+                    Action::RotateCW => actions.push(AppInput::Game(GameAction::RotateCW)),
+                    Action::RotateCCW => actions.push(AppInput::Game(GameAction::RotateCCW)),
+                    Action::Rotate180 => actions.push(AppInput::Game(GameAction::Rotate180)),
+                    Action::Hold => actions.push(AppInput::Game(GameAction::Hold)),
+                    Action::Pause => actions.push(AppInput::Pause),
+                    Action::Quit => actions.push(AppInput::Quit),
+                    Action::Restart => actions.push(AppInput::Restart),
+                    _ => {}
                 }
             }
             KeyEventKind::Release => {
@@ -143,64 +144,68 @@ impl InputHandler {
                 match action {
                     Some(Action::MoveLeft) => {
                         self.das.left.release();
-                        None
                     }
                     Some(Action::MoveRight) => {
                         self.das.right.release();
-                        None
                     }
                     Some(Action::SoftDrop) => {
                         self.das.soft_drop.release();
-                        Some(AppInput::Game(GameAction::SoftDropRelease))
+                        actions.push(AppInput::Game(GameAction::SoftDropRelease));
                     }
-                    _ => None,
+                    _ => {}
                 }
             }
             // Repeat events are handled by DAS, ignore them
-            _ => None,
+            _ => {}
         }
     }
 
     /// Input handling for terminals without key release events.
     /// Each Press/Repeat generates exactly one action; DAS is not used.
+    /// For SoftDrop, we emit both SoftDrop and SoftDropRelease so the
+    /// persistent soft_dropping flag doesn't stay on between frames.
     fn process_game_key_no_release(
         &mut self,
         code: KeyCode,
         kind: KeyEventKind,
-    ) -> Option<AppInput> {
+        actions: &mut Vec<AppInput>,
+    ) {
         match kind {
             KeyEventKind::Press | KeyEventKind::Repeat => {
-                let action = self.keybinds.resolve_game(code)?;
+                let Some(action) = self.keybinds.resolve_game(code) else {
+                    return;
+                };
                 match action {
-                    Action::MoveLeft => Some(AppInput::Game(GameAction::MoveLeft)),
-                    Action::MoveRight => Some(AppInput::Game(GameAction::MoveRight)),
-                    Action::SoftDrop => Some(AppInput::Game(GameAction::SoftDrop)),
+                    Action::MoveLeft => actions.push(AppInput::Game(GameAction::MoveLeft)),
+                    Action::MoveRight => actions.push(AppInput::Game(GameAction::MoveRight)),
+                    Action::SoftDrop => {
+                        // Move down one cell, then immediately release so gravity
+                        // doesn't stay in soft-drop mode forever.
+                        actions.push(AppInput::Game(GameAction::SoftDrop));
+                        actions.push(AppInput::Game(GameAction::SoftDropRelease));
+                    }
                     Action::HardDrop => {
                         // Only on initial press, not repeats, to avoid accidental hard drops
                         if kind == KeyEventKind::Press {
-                            Some(AppInput::Game(GameAction::HardDrop))
-                        } else {
-                            None
+                            actions.push(AppInput::Game(GameAction::HardDrop));
                         }
                     }
-                    Action::RotateCW => Some(AppInput::Game(GameAction::RotateCW)),
-                    Action::RotateCCW => Some(AppInput::Game(GameAction::RotateCCW)),
-                    Action::Rotate180 => Some(AppInput::Game(GameAction::Rotate180)),
+                    Action::RotateCW => actions.push(AppInput::Game(GameAction::RotateCW)),
+                    Action::RotateCCW => actions.push(AppInput::Game(GameAction::RotateCCW)),
+                    Action::Rotate180 => actions.push(AppInput::Game(GameAction::Rotate180)),
                     Action::Hold => {
                         if kind == KeyEventKind::Press {
-                            Some(AppInput::Game(GameAction::Hold))
-                        } else {
-                            None
+                            actions.push(AppInput::Game(GameAction::Hold));
                         }
                     }
-                    Action::Pause => Some(AppInput::Pause),
-                    Action::Quit => Some(AppInput::Quit),
-                    Action::Restart => Some(AppInput::Restart),
-                    _ => None,
+                    Action::Pause => actions.push(AppInput::Pause),
+                    Action::Quit => actions.push(AppInput::Quit),
+                    Action::Restart => actions.push(AppInput::Restart),
+                    _ => {}
                 }
             }
             // No release events expected; ignore anything else
-            _ => None,
+            _ => {}
         }
     }
 
