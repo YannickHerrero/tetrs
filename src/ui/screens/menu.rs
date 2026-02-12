@@ -2,6 +2,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::Widget;
+use unicode_width::UnicodeWidthStr;
 
 use crate::ui::theme;
 
@@ -100,7 +101,7 @@ impl Widget for &MenuScreen {
             let hue = ((self.frame as f32 * 2.0 + i as f32 * 20.0) % 360.0) / 360.0;
             let color = hsl_to_rgb(hue, 0.7, 0.65);
             let style = Style::default().fg(color).add_modifier(Modifier::BOLD);
-            let x = center_x.saturating_sub(line.len() as u16 / 2);
+            let x = center_x.saturating_sub(line.width() as u16 / 2);
             if y < area.y + area.height {
                 buf.set_string(x, y, line, style);
             }
@@ -115,7 +116,6 @@ impl Widget for &MenuScreen {
             }
 
             let is_selected = i == self.selected;
-            let cursor = if is_selected { " ▸ " } else { "   " };
 
             let label_style = if is_selected {
                 theme::menu_selected_style()
@@ -123,14 +123,20 @@ impl Widget for &MenuScreen {
                 theme::menu_item_style()
             };
 
-            let line = format!("{}{}", cursor, item.label);
-            let x = center_x.saturating_sub(line.len() as u16 / 2 + 5);
-            buf.set_string(x, y, &line, label_style);
+            // Center based on the label only so cursor prefix doesn't shift text
+            let label_w = item.label.width() as u16;
+            let label_x = center_x.saturating_sub(label_w / 2);
+            let cursor_x = label_x.saturating_sub(3);
+
+            if is_selected {
+                buf.set_string(cursor_x, y, " \u{25b8} ", label_style);
+            }
+            buf.set_string(label_x, y, item.label, label_style);
 
             // Description (only for selected)
             if is_selected {
                 y += 1;
-                let desc_x = center_x.saturating_sub(item.description.len() as u16 / 2);
+                let desc_x = center_x.saturating_sub(item.description.width() as u16 / 2);
                 buf.set_string(desc_x, y, item.description, theme::menu_desc_style());
             }
             y += 1;
@@ -142,7 +148,7 @@ impl Widget for &MenuScreen {
 
         // Controls help at bottom
         let controls = "j/k: navigate  Enter/Space: select  q: quit";
-        let ctrl_x = center_x.saturating_sub(controls.len() as u16 / 2);
+        let ctrl_x = center_x.saturating_sub(controls.width() as u16 / 2);
         let ctrl_y = area.y + area.height - 2;
         if ctrl_y > y {
             buf.set_string(ctrl_x, ctrl_y, controls, theme::menu_desc_style());
